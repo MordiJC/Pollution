@@ -10,7 +10,7 @@
 -author("jacob").
 
 %% API
--export([createMonitor/0, addStation/3, addValue/5, testMe/0, removeValue/4, getOneValue/4, getStationMean/3]).
+-export([createMonitor/0, addStation/3, addValue/5, testMe/0, removeValue/4, getOneValue/4, getStationMean/3, getDailyMean/3]).
 
 -record(measurement, {time, type, value}).
 -record(measurementStation, {name, position, measurements = []}).
@@ -126,12 +126,46 @@ getStationMean(Name, Type, Monitor) when is_list(Name) and is_record(Monitor, po
 
 getMean([], _) -> 0;
 getMean(Measurements, Type) ->
-  MeanFun = fun(#measurement{value = Value}, Acc) -> Value + Acc end,
+  SumFun = fun(#measurement{value = Value}, {Acc, Cnt}) -> {Value + Acc, Cnt + 1} end,
   FilteredMeasurements = lists:filter(
     fun(#measurement{type = Tp}) -> Tp =:= Type end,
     Measurements
   ),
-  lists:foldl(MeanFun, 0, FilteredMeasurements) / length(FilteredMeasurements).
+  {MeasurementsSum, MeasurementsCount} = lists:foldl(SumFun, {0, 0}, FilteredMeasurements),
+  MeasurementsSum / MeasurementsCount.
+
+%%% Get daily mean value
+%%% TODO: FIX THIS!!!
+getDailyMean(Type, Date = {_, _, _}, Monitor) when is_record(Monitor, pollutionMonitor) ->
+  MeasurementsPredicate = fun(#measurement{type = Tp, time = {Dt, _}}) ->
+    (Tp =:= Type) and (Dt =:= Date) end,
+  StationsPredicate =
+    fun(#measurementStation{measurements = Measurements}) ->
+      lists:any(
+        MeasurementsPredicate,
+        Measurements
+      )
+    end,
+  MeasurementsSumFun = fun(#measurement{value = Value}, {Acc, Cnt}) -> {Value + Acc, Cnt + 1} end,
+  {SumOfMeasurements, CountOfMeasurements} = lists:foldl(
+    fun({S, C}, {AcuS, AcuC}) ->
+      ({S + AcuS, C + AcuC})
+    end,
+    {0, 0},
+    lists:map(
+      fun(#measurementStation{measurements = Meas}) ->
+        lists:foldl(MeasurementsSumFun, {0, 0}, Meas)
+      end,
+      lists:filter(
+        StationsPredicate,
+        Monitor#pollutionMonitor.stations
+      )
+    )
+  ),
+  case CountOfMeasurements == 0 of
+    true -> 0;
+    false -> (SumOfMeasurements / CountOfMeasurements)
+  end.
 
 testMe() ->
   Tm = calendar:local_time(),
@@ -144,6 +178,7 @@ testMe() ->
   io:format("~p PM10 = ~p~n", [{50.2345, 18.3445}, getOneValue({50.2345, 18.3445}, Tm, "PM10", P3)]),
   io:format("\"Aleja Słowackiego\" Mean PM2,5 = ~p~n", [getStationMean("Aleja Słowackiego", "PM2,5", P3)]),
   io:format("~p Mean PM10 = ~p~n", [{50.2345, 18.3445}, getStationMean({50.2345, 18.3445}, "PM10", P3)]),
+  io:format("Daily mean for PM10:~n~p~n", [getDailyMean("PM10", lists:nth(2, tuple_to_list(Tm)), P3)]),
   P4 = removeValue({50.2345, 18.3445}, Tm, "PM10", P3),
   P5 = removeValue("Aleja Słowackiego", Tm, "PM2,5", P4),
   io:format("P5:~n~p~n", [P5]).
