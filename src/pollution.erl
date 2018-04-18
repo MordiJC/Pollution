@@ -10,7 +10,8 @@
 -author("jacob").
 
 %% API
--export([createMonitor/0, addStation/3, addValue/5, testMe/0, removeValue/4, getOneValue/4, getStationMean/3, getDailyMean/3, getDeviation/3]).
+-export([createMonitor/0, addStation/3, addValue/5, removeValue/4,
+  getOneValue/4, getStationMean/3, getDailyMean/3, getDeviation/3]).
 
 -record(measurement, {time, type, value}).
 -record(measurementStation, {name, position, measurements = []}).
@@ -21,12 +22,12 @@ createMonitor() -> #pollutionMonitor{stations = []}.
 
 %%% Add station to existing monitor
 addStation(Name, Position, Monitor = #pollutionMonitor{stations = Stations}) ->
-  case  lists:any(
-      fun(#measurementStation{name = PMSName, position = PMSPosition}) ->
-        (Name =:= PMSName) or (Position =:= PMSPosition)
-      end,
-      Stations
-    ) of
+  case lists:any(
+    fun(#measurementStation{name = PMSName, position = PMSPosition}) ->
+      (Name =:= PMSName) or (Position =:= PMSPosition)
+    end,
+    Stations
+  ) of
     true -> throw({error, "Station already exists."});
     false -> addStationToMonitor(#measurementStation{name = Name, position = Position}, Monitor)
   end.
@@ -39,15 +40,15 @@ addStationToMonitor(Station, Monitor) when is_record(Station, measurementStation
 addValue(Position, Time, Type, Value, Monitor) when is_tuple(Position) and is_record(Monitor, pollutionMonitor) ->
   Found = getStationByPosition(Position, Monitor),
   #pollutionMonitor{
-    stations = [(Monitor#pollutionMonitor.stations -- Found)
-      ++ addValueToStation(Found, #measurement{time = Time, type = Type, value = Value})]
+    stations = [addValueToStation(Found, #measurement{time = Time, type = Type, value = Value})]
+    ++ (Monitor#pollutionMonitor.stations -- Found)
   };
 
 addValue(Name, Time, Type, Value, Monitor) when is_list(Name) and is_record(Monitor, pollutionMonitor) ->
   Found = getStationByName(Name, Monitor),
   #pollutionMonitor{
-    stations = [(Monitor#pollutionMonitor.stations -- Found)
-      ++ addValueToStation(Found, #measurement{time = Time, type = Type, value = Value})]
+    stations = [addValueToStation(Found, #measurement{time = Time, type = Type, value = Value})]
+    ++ (Monitor#pollutionMonitor.stations -- Found)
   }.
 
 addValueToStation([Station | []], Measurement) when is_record(Station, measurementStation) and is_record(Measurement, measurement) ->
@@ -59,21 +60,28 @@ addValueToStation([Station | []], Measurement) when is_record(Station, measureme
 
 getStationByPosition(Position, Monitor) when is_tuple(Position) ->
   Found = [S || S <- Monitor#pollutionMonitor.stations, S#measurementStation.position =:= Position],
-  checkFoundStationsLength(length(Found)),
-  Found.
-
-getStationByName(Name, Monitor) when is_list(Name) ->
-  Found = [S || S <- Monitor#pollutionMonitor.stations, S#measurementStation.name =:= Name],
-  checkFoundStationsLength(length(Found)),
-  Found.
-
-checkFoundStationsLength(FoundLen) when is_integer(FoundLen) ->
-  case FoundLen of
+  case length(Found) of
     0 -> throw("No station at this position was found.");
     1 -> true;
     _ -> throw("There are a few stations at this position.")
-  end.
+  end,
+  Found.
 
+getStationByName(Name, Monitor) when is_list(Name) ->
+%%  Found = [S || S <- Monitor#pollutionMonitor.stations, S#measurementStation.name =:= Name],
+  Found = lists:filter(
+    fun(#measurementStation{name = SName}) ->
+      (Name =:= SName)
+    end,
+    Monitor#pollutionMonitor.stations
+  ),
+  io:format("ABC ~p~n", [Found]),
+  case length(Found) of
+    0 -> throw("No station with this name was found.");
+    1 -> true;
+    _ -> throw("There are a few stations with this name.")
+  end,
+  Found.
 
 %%% Remove measurement from station
 removeValue(Position, Time, Type, Monitor) when is_tuple(Position) and is_record(Monitor, pollutionMonitor) ->
@@ -190,21 +198,3 @@ getStationMeasurementsByTypeAndHour(Type, Hour, #measurementStation{measurements
     end,
     Measurements
   ).
-
-testMe() ->
-  Tm = {{2018, 03, 03},{12,34,56}},
-  P = createMonitor(),
-  P1 = addStation("Aleja Słowackiego", {50.2345, 18.3445}, P),
-  P2 = addValue({50.2345, 18.3445}, Tm, "PM10", 69, addValue({50.2345, 18.3445}, Tm, "PM10", 59, P1)),
-  P3 = addValue("Aleja Słowackiego", Tm, "PM2,5", 113, P2),
-  io:format("P3:~n~p~n", [P3]),
-  io:format("\"Aleja Słowackiego\" PM2,5 = ~p~n", [getOneValue("Aleja Słowackiego", Tm, "PM2,5", P3)]),
-  io:format("~p PM10 = ~p~n", [{50.2345, 18.3445}, getOneValue({50.2345, 18.3445}, Tm, "PM10", P3)]),
-  io:format("\"Aleja Słowackiego\" Mean PM2,5 = ~p~n", [getStationMean("Aleja Słowackiego", "PM2,5", P3)]),
-  io:format("~p Mean PM10 = ~p~n", [{50.2345, 18.3445}, getStationMean({50.2345, 18.3445}, "PM10", P3)]),
-  io:format("Daily mean for PM10:~n~p~n", [getDailyMean("PM10", hd(tuple_to_list(Tm)), P3)]),
-  {_, {H,_,_}} = Tm,
-  io:format("Deviation for PM10: ~p~n", [getDeviation("PM10", H, P3)]),
-  P4 = removeValue({50.2345, 18.3445}, Tm, "PM10", P3),
-  P5 = removeValue("Aleja Słowackiego", Tm, "PM2,5", P4),
-  io:format("P5:~n~p~n", [P5]).
