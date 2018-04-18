@@ -20,15 +20,16 @@
 createMonitor() -> #pollutionMonitor{stations = []}.
 
 %%% Add station to existing monitor
-addStation(Name, Position, Monitor) when is_record(Monitor, pollutionMonitor)
-  -> case
-       length(
-         lists:filter(fun(#measurementStation{name = PMSName, position = PMSPosition}) ->
-           (Name =/= PMSName) and (Position =/= PMSPosition) end, Monitor#pollutionMonitor.stations)
-       ) == 0 of
-       true -> addStationToMonitor(#measurementStation{name = Name, position = Position}, Monitor);
-       false -> throw("Station already exists.")
-     end.
+addStation(Name, Position, Monitor = #pollutionMonitor{stations = Stations}) ->
+  case  lists:any(
+      fun(#measurementStation{name = PMSName, position = PMSPosition}) ->
+        (Name =:= PMSName) or (Position =:= PMSPosition)
+      end,
+      Stations
+    ) of
+    true -> throw({error, "Station already exists."});
+    false -> addStationToMonitor(#measurementStation{name = Name, position = Position}, Monitor)
+  end.
 
 addStationToMonitor(Station, Monitor) when is_record(Station, measurementStation) ->
   #pollutionMonitor{stations = [Station | Monitor#pollutionMonitor.stations]}.
