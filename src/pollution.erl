@@ -135,37 +135,46 @@ getMean(Measurements, Type) ->
   MeasurementsSum / MeasurementsCount.
 
 %%% Get daily mean value
-%%% TODO: FIX THIS!!!
-getDailyMean(Type, Date = {_, _, _}, Monitor) when is_record(Monitor, pollutionMonitor) ->
-  MeasurementsPredicate = fun(#measurement{type = Tp, time = {Dt, _}}) ->
-    (Tp =:= Type) and (Dt =:= Date) end,
-  StationsPredicate =
-    fun(#measurementStation{measurements = Measurements}) ->
-      lists:any(
-        MeasurementsPredicate,
-        Measurements
-      )
-    end,
-  MeasurementsSumFun = fun(#measurement{value = Value}, {Acc, Cnt}) -> {Value + Acc, Cnt + 1} end,
+getDailyMean(Type, Date, Monitor) ->
   {SumOfMeasurements, CountOfMeasurements} = lists:foldl(
-    fun({S, C}, {AcuS, AcuC}) ->
-      ({S + AcuS, C + AcuC})
-    end,
+    fun(#measurement{value = Value}, {Acc1, Acc2}) -> {Value + Acc1, Acc2 + 1} end,
     {0, 0},
-    lists:map(
-      fun(#measurementStation{measurements = Meas}) ->
-        lists:foldl(MeasurementsSumFun, {0, 0}, Meas)
-      end,
-      lists:filter(
-        StationsPredicate,
-        Monitor#pollutionMonitor.stations
-      )
-    )
+    getMonitorMeasurementsByTypeAndDate(Type, Date, Monitor)
   ),
   case CountOfMeasurements == 0 of
     true -> 0;
     false -> (SumOfMeasurements / CountOfMeasurements)
   end.
+
+getMonitorMeasurementsByTypeAndDate(Type, Date, #pollutionMonitor{stations = Stations}) ->
+  lists:concat([getStationMeasurementsByTypeAndDate(Type, Date, S) || S <- Stations]).
+
+getStationMeasurementsByTypeAndDate(Type, Date, #measurementStation{measurements = Measurements}) ->
+  lists:filter(
+    fun(#measurement{type = MType, time = {MDate, _}}) ->
+      (MType =:= Type) and (Date =:= MDate)
+    end,
+    Measurements
+  ).
+
+%%% Calculate standard deviation of measurements by type and hour
+getDeviation(Type, Hour, #pollutionMonitor{stations = Stations}) ->
+  {SumOfMeasurements, CountOfMeasurements} = lists:foldl(
+    fun({X1, X2}, {Acc1, Acc2}) -> {X1 + Acc1, X2 + Acc2} end,
+    {0, 0},
+    getMonitorMeasurementsByTypeAndHour(Type, Hour, Stations)
+  ).
+
+getMonitorMeasurementsByTypeAndHour(Type, Hour, #pollutionMonitor{stations = Stations}) ->
+  lists:concat([getStationMeasurementsByTypeAndHour(Type, Hour, S) || S <- Stations]).
+
+getStationMeasurementsByTypeAndHour(Type, Hour, #measurementStation{measurements = Measurements}) ->
+  lists:filter(
+    fun(#measurement{type = MType, time = {_, {MHour, _, _}}}) ->
+      (MType =:= Type) and (Hour =:= MHour)
+    end,
+    Measurements
+  ).
 
 testMe() ->
   Tm = calendar:local_time(),
@@ -178,7 +187,7 @@ testMe() ->
   io:format("~p PM10 = ~p~n", [{50.2345, 18.3445}, getOneValue({50.2345, 18.3445}, Tm, "PM10", P3)]),
   io:format("\"Aleja Słowackiego\" Mean PM2,5 = ~p~n", [getStationMean("Aleja Słowackiego", "PM2,5", P3)]),
   io:format("~p Mean PM10 = ~p~n", [{50.2345, 18.3445}, getStationMean({50.2345, 18.3445}, "PM10", P3)]),
-  io:format("Daily mean for PM10:~n~p~n", [getDailyMean("PM10", lists:nth(2, tuple_to_list(Tm)), P3)]),
+  io:format("Daily mean for PM10:~n~p~n", [getDailyMean("PM10", hd(tuple_to_list(Tm)), P3)]),
   P4 = removeValue({50.2345, 18.3445}, Tm, "PM10", P3),
   P5 = removeValue("Aleja Słowackiego", Tm, "PM2,5", P4),
   io:format("P5:~n~p~n", [P5]).
