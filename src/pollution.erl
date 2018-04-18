@@ -10,7 +10,7 @@
 -author("jacob").
 
 %% API
--export([createMonitor/0, addStation/3, addValue/5, testMe/0, removeValue/4, getOneValue/4, getStationMean/3, getDailyMean/3]).
+-export([createMonitor/0, addStation/3, addValue/5, testMe/0, removeValue/4, getOneValue/4, getStationMean/3, getDailyMean/3, getDeviation/3]).
 
 -record(measurement, {time, type, value}).
 -record(measurementStation, {name, position, measurements = []}).
@@ -158,12 +158,26 @@ getStationMeasurementsByTypeAndDate(Type, Date, #measurementStation{measurements
   ).
 
 %%% Calculate standard deviation of measurements by type and hour
-getDeviation(Type, Hour, #pollutionMonitor{stations = Stations}) ->
+getDeviation(Type, Hour, Monitor) ->
+  Measurements = getMonitorMeasurementsByTypeAndHour(Type, Hour, Monitor),
   {SumOfMeasurements, CountOfMeasurements} = lists:foldl(
-    fun({X1, X2}, {Acc1, Acc2}) -> {X1 + Acc1, X2 + Acc2} end,
+    fun(#measurement{value = Value}, {Sum, Cnt}) -> {Value + Sum, 1 + Cnt} end,
     {0, 0},
-    getMonitorMeasurementsByTypeAndHour(Type, Hour, Stations)
-  ).
+    Measurements
+  ),
+  Avg = if
+          CountOfMeasurements == 0 -> 0;
+          true -> SumOfMeasurements / CountOfMeasurements
+        end,
+  VarianceDenominator = lists:foldl(
+    fun(#measurement{value = Value}, VD) -> (VD + math:pow(Value - Avg, 2)) end,
+    0,
+    Measurements
+  ),
+  if
+    CountOfMeasurements == 0 -> 0;
+    true -> math:sqrt(VarianceDenominator / CountOfMeasurements)
+  end.
 
 getMonitorMeasurementsByTypeAndHour(Type, Hour, #pollutionMonitor{stations = Stations}) ->
   lists:concat([getStationMeasurementsByTypeAndHour(Type, Hour, S) || S <- Stations]).
@@ -177,10 +191,10 @@ getStationMeasurementsByTypeAndHour(Type, Hour, #measurementStation{measurements
   ).
 
 testMe() ->
-  Tm = calendar:local_time(),
+  Tm = {{2018, 03, 03},{12,34,56}},
   P = createMonitor(),
   P1 = addStation("Aleja Słowackiego", {50.2345, 18.3445}, P),
-  P2 = addValue({50.2345, 18.3445}, Tm, "PM10", 59, P1),
+  P2 = addValue({50.2345, 18.3445}, Tm, "PM10", 69, addValue({50.2345, 18.3445}, Tm, "PM10", 59, P1)),
   P3 = addValue("Aleja Słowackiego", Tm, "PM2,5", 113, P2),
   io:format("P3:~n~p~n", [P3]),
   io:format("\"Aleja Słowackiego\" PM2,5 = ~p~n", [getOneValue("Aleja Słowackiego", Tm, "PM2,5", P3)]),
@@ -188,6 +202,8 @@ testMe() ->
   io:format("\"Aleja Słowackiego\" Mean PM2,5 = ~p~n", [getStationMean("Aleja Słowackiego", "PM2,5", P3)]),
   io:format("~p Mean PM10 = ~p~n", [{50.2345, 18.3445}, getStationMean({50.2345, 18.3445}, "PM10", P3)]),
   io:format("Daily mean for PM10:~n~p~n", [getDailyMean("PM10", hd(tuple_to_list(Tm)), P3)]),
+  {_, {H,_,_}} = Tm,
+  io:format("Deviation for PM10: ~p~n", [getDeviation("PM10", H, P3)]),
   P4 = removeValue({50.2345, 18.3445}, Tm, "PM10", P3),
   P5 = removeValue("Aleja Słowackiego", Tm, "PM2,5", P4),
   io:format("P5:~n~p~n", [P5]).
