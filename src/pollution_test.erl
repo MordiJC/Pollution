@@ -34,20 +34,37 @@ addStationWithTheSamePosition_test() ->
   ?assertThrow({error, _},
     pollution:addStation("Station 2", {0, 0}, P1)).
 
+getOneValueByPosition_test() ->
+  Monitor = setupForValuesTesting(),
+  ?assertEqual(150, pollution:getOneValue(
+    {0,0},
+    {{2018, 03, 12},{12, 20, 00}},
+    "PM10",
+    Monitor)).
+
+getOneValueByName_test() ->
+  Monitor = setupForValuesTesting(),
+  ?assertEqual(150, pollution:getOneValue(
+    "Station 1",
+    {{2018, 03, 12},{12, 20, 00}},
+    "PM10",
+    Monitor)).
+
+
 addValuesFromList([], Monitor) -> Monitor;
 addValuesFromList([H|T], Monitor) ->
   {NameOrPos, Time, Type, Value} = H,
-  addValuesFromList(
+  pollution:addValue(
     NameOrPos, Time, Type, Value,
     addValuesFromList(T, Monitor)
   ).
 
 setupForValuesTesting() ->
-  Time = {{2018, 03, 12}, {21, 37, 00}},
   P = pollution:createMonitor(),
   P1 = pollution:addStation("Station 1", {0, 0}, P),
   P2 = pollution:addStation("Station 2", {1, 1}, P1),
   P3 = pollution:addStation("Station 3", {1, 0}, P2),
+  io:write(P3),
   P4 = addValuesFromList(
     [
       {"Station 1", {{2018, 03, 12},{12, 20, 00}}, "PM10", 150},
