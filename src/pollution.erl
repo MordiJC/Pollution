@@ -62,26 +62,22 @@ getStationByPosition(Position, Monitor) when is_tuple(Position) ->
   Found = [S || S <- Monitor#pollutionMonitor.stations, S#measurementStation.position =:= Position],
   case length(Found) of
     0 -> throw("No station at this position was found.");
-    1 -> true;
+    1 -> Found;
     _ -> throw("There are a few stations at this position.")
-  end,
-  Found.
+  end.
 
 getStationByName(Name, Monitor) when is_list(Name) ->
-%%  Found = [S || S <- Monitor#pollutionMonitor.stations, S#measurementStation.name =:= Name],
   Found = lists:filter(
     fun(#measurementStation{name = SName}) ->
       (Name =:= SName)
     end,
     Monitor#pollutionMonitor.stations
   ),
-  io:format("ABC ~p~n", [Found]),
   case length(Found) of
     0 -> throw("No station with this name was found.");
-    1 -> true;
+    1 -> Found;
     _ -> throw("There are a few stations with this name.")
-  end,
-  Found.
+  end.
 
 %%% Remove measurement from station
 removeValue(Position, Time, Type, Monitor) when is_tuple(Position) and is_record(Monitor, pollutionMonitor) ->
