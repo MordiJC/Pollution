@@ -18,10 +18,6 @@
 %%  P1 = pollution:addStation("Stacja 1", {50.2, 18.3}, P),
 %%  P2 = pollution:addStation("Stacja 2", {50.3, 18.1}, P1).
 
-
-simple_test() ->
-  ?assert(true).
-
 addStationWithTheSameName_test() ->
   P = pollution:createMonitor(),
   P1 = pollution:addStation("Station 1", {0, 0}, P),
@@ -64,7 +60,6 @@ setupForValuesTesting() ->
   P1 = pollution:addStation("Station 1", {0, 0}, P),
   P2 = pollution:addStation("Station 2", {1, 1}, P1),
   P3 = pollution:addStation("Station 3", {1, 0}, P2),
-  io:write(P3),
   P4 = addValuesFromList(
     [
       {"Station 1", {{2018, 03, 12},{12, 20, 00}}, "PM10", 150},
