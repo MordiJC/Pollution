@@ -25,91 +25,52 @@ stop() ->
 init() ->
   loop(pollution:createMonitor()).
 
+loop_default_request_handler(Pid, _ReturnedTuple = {State, Value}, Monitor) ->
+  case State of
+    ok ->
+      Pid ! {response, {ok, ""}},
+      loop(Value);
+    _ ->
+      Pid ! {response, {error, Value}},
+      loop(Monitor)
+  end.
+
 loop(Monitor) ->
   receive
     {request, Pid, addStation, Args} ->
       {Name, Position} = Args,
-      try pollution:addStation(Name, Position, Monitor) of
-        M ->
-          Pid ! {response, {ok, ""}},
-          loop(M)
-      catch
-        throw:{error, Reason} ->
-          Pid ! {response, {error, Reason}},
-          loop(Monitor)
-      end;
+      {State, Value} = pollution:addStation(Name, Position, Monitor),
+      loop_default_request_handler(Pid, {State, Value}, Monitor);
 
     {request, Pid, addValue, Args} ->
       {NameOrPosition, Time, Type, Value} = Args,
-      try pollution:addStation(NameOrPosition, Time, Type, Value, Monitor) of
-        M ->
-          Pid ! {response, {ok, ""}},
-          loop(M)
-      catch
-        throw:{error, Reason} ->
-          Pid ! {response, {error, Reason}},
-          loop(Monitor)
-      end;
+      {State, Value} = pollution:addStation(NameOrPosition, Time, Type, Value, Monitor),
+      loop_default_request_handler(Pid, {State, Value}, Monitor);
 
     {request, Pid, removeValue, Args} ->
       {NameOrPosition, Time, Type} = Args,
-      try pollution:removeValue(NameOrPosition, Time, Type, Monitor) of
-        M ->
-          Pid ! {response, {ok, ""}},
-          loop(M)
-      catch
-        throw:{error, Reason} ->
-          Pid ! {response, {error, Reason}},
-          loop(Monitor)
-      end;
+      {State, Value} = pollution:removeValue(NameOrPosition, Time, Type, Monitor),
+      loop_default_request_handler(Pid, {State, Value}, Monitor);
 
     {request, Pid, getOneValue, Args} ->
       {NameOrPosition, Time, Type} = Args,
-      try pollution:getOneValue(NameOrPosition, Time, Type, Monitor) of
-        M ->
-          Pid ! {response, {ok, ""}},
-          loop(M)
-      catch
-        throw:{error, Reason} ->
-          Pid ! {response, {error, Reason}},
-          loop(Monitor)
-      end;
+      {State, Value} = pollution:getOneValue(NameOrPosition, Time, Type, Monitor),
+      loop_default_request_handler(Pid, {State, Value}, Monitor);
 
     {request, Pid, getStationMean, Args} ->
       {NameOrPosition, Type} = Args,
-      try pollution:getStationMean(NameOrPosition, Type, Monitor) of
-        M ->
-          Pid ! {response, {ok, ""}},
-          loop(M)
-      catch
-        throw:{error, Reason} ->
-          Pid ! {response, {error, Reason}},
-          loop(Monitor)
-      end;
+      {State, Value} = pollution:getStationMean(NameOrPosition, Type, Monitor),
+      loop_default_request_handler(Pid, {State, Value}, Monitor);
 
     {request, Pid, getDailyMean, Args} ->
       {Type, Date} = Args,
-      try pollution:getDailyMean(Type, Date, Monitor) of
-        M ->
-          Pid ! {response, {ok, ""}},
-          loop(M)
-      catch
-        throw:{error, Reason} ->
-          Pid ! {response, {error, Reason}},
-          loop(Monitor)
-      end;
+      {State, Value} = pollution:getDailyMean(Type, Date, Monitor),
+      loop_default_request_handler(Pid, {State, Value}, Monitor);
 
     {request, Pid, getDeviation, Args} ->
       {Type, Hour} = Args,
-      try pollution:getDeviation(Type, Hour, Monitor) of
-        M ->
-          Pid ! {response, {ok, ""}},
-          loop(M)
-      catch
-        throw:{error, Reason} ->
-          Pid ! {response, {error, Reason}},
-          loop(Monitor)
-      end;
+      {State, Value} = pollution:getDeviation(Type, Hour, Monitor),
+      loop_default_request_handler(Pid, {State, Value}, Monitor);
 
     {request, Pid, stop} ->
       Pid ! {response, {ok, "Shutting down."}}
