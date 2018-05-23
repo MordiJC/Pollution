@@ -18,7 +18,7 @@
 -record(pollutionMonitor, {stations = []}).
 
 %%% Create new stations monitor
-createMonitor() -> {ok, #pollutionMonitor{stations = []}}.
+createMonitor() -> {ok, (#pollutionMonitor{})}.
 
 %%% Add station to existing monitor
 addStation(Name, Position, Monitor = #pollutionMonitor{stations = Stations}) ->
