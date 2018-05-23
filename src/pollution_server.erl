@@ -10,17 +10,20 @@
 -author("jacob").
 
 %% API
--export([start/0, stop/0]).
+-export([start/0, stop/0, addStation/2, addValue/4, removeValue/3, getOneValue/3, getStationMean/2, getDailyMean/2, getDeviation/2, crash/0, init/0, start_link/0]).
 
 start() ->
-  register(pollutionServer, spawn(pollution_server, init, [pollution:createMonitor()])).
+  register(pollutionServer, spawn(?MODULE, init, [])).
+
+start_link() ->
+  register(pollutionServer, spawn_link(?MODULE, init, [])).
 
 stop() ->
+  pollutionServer ! {request, self(), stop},
   unregister(pollutionServer).
 
-
-init(Monitor) ->
-  loop(Monitor).
+init() ->
+  loop(pollution:createMonitor()).
 
 loop(Monitor) ->
   receive
@@ -31,7 +34,9 @@ loop(Monitor) ->
           Pid ! {response, {ok, ""}},
           loop(M)
       catch
-        throw:{error, Reason} -> Pid ! {response, {error, Reason}}
+        throw:{error, Reason} ->
+          Pid ! {response, {error, Reason}},
+          loop(Monitor)
       end;
 
     {request, Pid, addValue, Args} ->
@@ -41,7 +46,9 @@ loop(Monitor) ->
           Pid ! {response, {ok, ""}},
           loop(M)
       catch
-        throw:{error, Reason} -> Pid ! {response, {error, Reason}}
+        throw:{error, Reason} ->
+          Pid ! {response, {error, Reason}},
+          loop(Monitor)
       end;
 
     {request, Pid, removeValue, Args} ->
@@ -51,7 +58,9 @@ loop(Monitor) ->
           Pid ! {response, {ok, ""}},
           loop(M)
       catch
-        throw:{error, Reason} -> Pid ! {response, {error, Reason}}
+        throw:{error, Reason} ->
+          Pid ! {response, {error, Reason}},
+          loop(Monitor)
       end;
 
     {request, Pid, getOneValue, Args} ->
@@ -61,7 +70,9 @@ loop(Monitor) ->
           Pid ! {response, {ok, ""}},
           loop(M)
       catch
-        throw:{error, Reason} -> Pid ! {response, {error, Reason}}
+        throw:{error, Reason} ->
+          Pid ! {response, {error, Reason}},
+          loop(Monitor)
       end;
 
     {request, Pid, getStationMean, Args} ->
@@ -71,7 +82,9 @@ loop(Monitor) ->
           Pid ! {response, {ok, ""}},
           loop(M)
       catch
-        throw:{error, Reason} -> Pid ! {response, {error, Reason}}
+        throw:{error, Reason} ->
+          Pid ! {response, {error, Reason}},
+          loop(Monitor)
       end;
 
     {request, Pid, getDailyMean, Args} ->
@@ -81,7 +94,9 @@ loop(Monitor) ->
           Pid ! {response, {ok, ""}},
           loop(M)
       catch
-        throw:{error, Reason} -> Pid ! {response, {error, Reason}}
+        throw:{error, Reason} ->
+          Pid ! {response, {error, Reason}},
+          loop(Monitor)
       end;
 
     {request, Pid, getDeviation, Args} ->
@@ -91,10 +106,36 @@ loop(Monitor) ->
           Pid ! {response, {ok, ""}},
           loop(M)
       catch
-        throw:{error, Reason} -> Pid ! {response, {error, Reason}}
+        throw:{error, Reason} ->
+          Pid ! {response, {error, Reason}},
+          loop(Monitor)
       end;
 
     {request, Pid, stop} ->
       Pid ! {response, {ok, "Shutting down."}}
 
   end.
+
+addStation(Name, Position) ->
+  pollutionServer ! {request, self(), addStation, {Name, Position}}.
+
+addValue(PositionOrName, Time, Type, Value) ->
+  pollutionServer ! {request, self(), addValue, {PositionOrName, Time, Type, Value}}.
+
+removeValue(PositionOrName, Time, Type) ->
+  pollutionServer ! {request, self(), addValue, {PositionOrName, Time, Type}}.
+
+getOneValue(PositionOrName, Time, Type) ->
+  pollutionServer ! {request, self(), getOneValue, {PositionOrName, Time, Type}}.
+
+getStationMean(PositionOrName, Type) ->
+  pollutionServer ! {request, self(), getStationMean, {PositionOrName, Type}}.
+
+getDailyMean(Type, Date) ->
+  pollutionServer ! {request, self(), getDailyMean, {Type, Date}}.
+
+getDeviation(Type, Hour) ->
+  pollutionServer ! {request, self(), getDeviation, {Type, Hour}}.
+
+crash() ->
+  pollutionServer ! {request, self(), addStation, {}}.
