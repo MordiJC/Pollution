@@ -8,16 +8,12 @@
 %%%-------------------------------------------------------------------
 -module(pollution_server_supervisor).
 -author("jacob").
--behaviour(supervisor).
 
 %% API
--export([start/0, stop/0, init/0]).
+-export([start/0, init/0]).
 
 start() ->
-  register(pollutionServerSupervisor, spawn(?MODULE, init, [])).
-
-stop() ->
-  unregister(pollutionServer).
+  spawn(?MODULE, init, []).
 
 init() ->
   process_flag(trap_exit, true),
