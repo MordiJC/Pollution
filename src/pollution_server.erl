@@ -10,7 +10,7 @@
 -author("jacob").
 
 %% API
--export([start/0, stop/0, addStation/2, addValue/4, removeValue/3, getOneValue/3, getStationMean/2, getDailyMean/2, getDeviation/2, crash/0, init/0, start_link/0]).
+-export([start/0, stop/0, addStation/2, addValue/4, removeValue/3, getOneValue/3, getStationMean/2, getDailyMean/2, getDeviation/2, crash/0, init/0, start_link/0, getMonitor/0]).
 
 start() ->
   register(pollutionServer, spawn(?MODULE, init, [])).
@@ -23,12 +23,13 @@ stop() ->
   unregister(pollutionServer).
 
 init() ->
-  loop(pollution:createMonitor()).
+  {ok, Monitor} = pollution:createMonitor(),
+  loop(Monitor).
 
-loop_default_request_handler(Pid, _ReturnedTuple = {State, Value}, Monitor) ->
+loop_default_request_handler(Pid, {State, Value}, Monitor) ->
   case State of
     ok ->
-      Pid ! {response, {ok, ""}},
+      Pid ! {response, {ok, Value}},
       loop(Value);
     _ ->
       Pid ! {response, {error, Value}},
@@ -72,6 +73,9 @@ loop(Monitor) ->
       {State, Value} = pollution:getDeviation(Type, Hour, Monitor),
       loop_default_request_handler(Pid, {State, Value}, Monitor);
 
+    {request, Pid, getMonitor, _} ->
+      loop_default_request_handler(Pid, {ok, Monitor}, Monitor);
+
     {request, Pid, stop} ->
       Pid ! {response, {ok, "Shutting down."}}
 
@@ -97,6 +101,9 @@ getDailyMean(Type, Date) ->
 
 getDeviation(Type, Hour) ->
   pollutionServer ! {request, self(), getDeviation, {Type, Hour}}.
+
+getMonitor() ->
+  pollutionServer ! {request, self(), getMonitor, {}}.
 
 crash() ->
   pollutionServer ! {request, self(), addStation, {}}.
