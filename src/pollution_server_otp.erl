@@ -10,9 +10,10 @@
 -author("jacob").
 
 -behaviour(gen_server).
+
 %% API
 -export([start_link/0, start/0, stop/0, addStation/2, addValue/4, removeValue/3, getOneValue/3, getStationMean/2, getDailyMean/2, getDeviation/2, getMonitor/0]).
--export([init/1, handle_call/3, handle_cast/2, terminate/2]).
+-export([init/1, handle_call/3, terminate/2]).
 
 %% START %%
 start_link() ->
@@ -27,7 +28,8 @@ stop() ->
 
 %% CLIENT -> SERVER interface
 
-addStation(Name, Position) -> gen_server:call(?MODULE, {addStation, Name, Position}).
+addStation(Name, Position) ->
+  gen_server:call(?MODULE, {addStation, Name, Position}).
 
 addValue(PositionOrName, Time, Type, Value) ->
   gen_server:call(?MODULE, {addValue, PositionOrName, Time, Type, Value}).
@@ -52,16 +54,67 @@ getMonitor() ->
 
 %% gen_server
 
-init(_Args) -> {ok, pollution:createMonitor()}.
+init(_Args) -> pollution:createMonitor().
+
 
 handle_call({addStation, Name, Position}, _From, Monitor) ->
   case pollution:addStation(Name, Position, Monitor) of
-    {response, }
-  end.
+    {ok, NMonitor} ->
+      {reply, "New station added.", NMonitor};
+    {error, Cause} ->
+      {reply, Cause, Monitor}
+  end;
 
-handle_cast(inc, N) -> {noreply, N + 1}.
+handle_call({addValue, PositionOrName, Time, Type, Value}, _From, Monitor) ->
+  case pollution:addValue(PositionOrName, Time, Type, Value, Monitor) of
+    {ok, NMonitor} ->
+      {reply, "New value added.", NMonitor};
+    {error, Cause} ->
+      {reply, Cause, Monitor}
+  end;
 
-handle_call(get, _From, N) -> {reply, N, N};
-handle_call(terminate, _From, N) -> {stop, normal, ok, N}.
+handle_call({removeValue, PositionOrName, Time, Type}, _From, Monitor) ->
+  case pollution:removeValue(PositionOrName, Time, Type, Monitor) of
+    {ok, NMonitor} ->
+      {reply, "Value removed.", NMonitor};
+    {error, Cause} ->
+      {reply, Cause, Monitor}
+  end;
+
+handle_call({getOneValue, PositionOrName, Time, Type}, _From, Monitor) ->
+  case pollution:getOneValue(PositionOrName, Time, Type, Monitor) of
+    {ok, Value} ->
+      {reply, Value, Monitor};
+    {error, Cause} ->
+      {reply, Cause, Monitor}
+  end;
+
+handle_call({getStationMean, PositionOrName, Type}, _From, Monitor) ->
+  case pollution:getStationMean(PositionOrName, Type, Monitor) of
+    {ok, Value} ->
+      {reply, Value, Monitor};
+    {error, Cause} ->
+      {reply, Cause, Monitor}
+  end;
+
+handle_call({getDailyMean, Type, Date}, _From, Monitor) ->
+  case pollution:getDailyMean(Type, Date, Monitor) of
+    {ok, Value} ->
+      {reply, Value, Monitor};
+    {error, Cause} ->
+      {reply, Cause, Monitor}
+  end;
+
+handle_call({getDeviation, Type, Hour}, _From, Monitor) ->
+  case pollution:getDeviation(Type, Hour, Monitor) of
+    {ok, Value} ->
+      {reply, Value, Monitor};
+    {error, Cause} ->
+      {reply, Cause, Monitor}
+  end;
+
+handle_call({getMonitor}, _From, Monitor) ->
+  {reply, Monitor, Monitor}.
+
 
 terminate(normal, N) -> io:format("The number is: ~B~nBye.~n", [N]), ok.

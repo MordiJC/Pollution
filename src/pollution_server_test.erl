@@ -17,7 +17,10 @@ startServer() ->
   pollution_server:start().
 
 stopServer() ->
-  pollution_server:stop().
+  pollution_server:stop(),
+  receive
+    {response, {ok, _}} -> ok
+  end.
 
 handleResponse() ->
   receive
@@ -34,59 +37,10 @@ addStationWithTheSameName_test() ->
   stopServer().
 
 addStationWithTheSamePosition_test() ->
+  io:format("START!~n"),
   startServer(),
   pollution_server:addStation("Station 1", {0, 0}),
   handleResponse(),
   pollution_server:addStation("Station 2", {0, 0}),
   ?assert(handleResponse() =:= false),
   stopServer().
-
-%%getOneValueByPosition_test() ->
-%%  Monitor = setupForValuesTesting(),
-%%  ?assertEqual(150, pollution_server:getOneValue(
-%%    {0,0},
-%%    {{2018, 03, 12},{12, 20, 00}},
-%%    "PM10")).
-%%
-%%getOneValueByName_test() ->
-%%  Monitor = setupForValuesTesting(),
-%%  ?assertEqual(150, pollution_server:getOneValue(
-%%    "Station 1",
-%%    {{2018, 03, 12},{12, 20, 00}},
-%%    "PM10",
-%%    Monitor)).
-%%
-%%
-%%addValuesFromList([], Monitor) -> Monitor;
-%%addValuesFromList([H|T], Monitor) ->
-%%  {NameOrPos, Time, Type, Value} = H,
-%%  pollution_server:addValue(
-%%    NameOrPos, Time, Type, Value,
-%%    addValuesFromList(T, Monitor)
-%%  ).
-%%
-%%setupForValuesTesting() ->
-%%  P = pollution_server:createMonitor(),
-%%  P1 = pollution_server:addStation("Station 1", {0, 0}, P),
-%%  P2 = pollution_server:addStation("Station 2", {1, 1}, P1),
-%%  P3 = pollution_server:addStation("Station 3", {1, 0}, P2),
-%%  P4 = addValuesFromList(
-%%    [
-%%      {"Station 1", {{2018, 03, 12},{12, 20, 00}}, "PM10", 150},
-%%      {"Station 1", {{2018, 03, 12},{12, 40, 00}}, "PM10", 140},
-%%      {"Station 1", {{2018, 03, 12},{12, 20, 00}}, "PM2,5", 100},
-%%      {"Station 1", {{2018, 03, 12},{12, 40, 00}}, "PM2,5", 110},
-%%
-%%      {"Station 2", {{2018, 03, 12},{12, 20, 00}}, "PM10", 170},
-%%      {"Station 2", {{2018, 03, 12},{12, 40, 00}}, "PM10", 180},
-%%      {"Station 2", {{2018, 03, 12},{12, 20, 00}}, "PM2,5", 200},
-%%      {"Station 2", {{2018, 03, 12},{12, 40, 00}}, "PM2,5", 210},
-%%
-%%      {"Station 3", {{2018, 03, 12},{12, 20, 00}}, "PM10", 160},
-%%      {"Station 3", {{2018, 03, 12},{12, 40, 00}}, "PM10", 150},
-%%      {"Station 3", {{2018, 03, 12},{12, 20, 00}}, "PM2,5", 90},
-%%      {"Station 3", {{2018, 03, 12},{12, 40, 00}}, "PM2,5", 110}
-%%    ],
-%%    P3
-%%  ),
-%%  P4.
