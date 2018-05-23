@@ -18,7 +18,7 @@
 -record(pollutionMonitor, {stations = []}).
 
 %%% Create new stations monitor
-createMonitor() -> #pollutionMonitor{stations = []}.
+createMonitor() -> {ok, #pollutionMonitor{stations = []}}.
 
 %%% Add station to existing monitor
 addStation(Name, Position, Monitor = #pollutionMonitor{stations = Stations}) ->
@@ -28,28 +28,117 @@ addStation(Name, Position, Monitor = #pollutionMonitor{stations = Stations}) ->
     end,
     Stations
   ) of
-    true -> throw({error, "Station already exists."});
-    false -> addStationToMonitor(#measurementStation{name = Name, position = Position}, Monitor)
+    true -> {error, "Station already exists."};
+    false -> {ok, addStationToMonitor(#measurementStation{name = Name, position = Position}, Monitor)}
   end.
-
-addStationToMonitor(Station, Monitor) when is_record(Station, measurementStation) ->
-  #pollutionMonitor{stations = [Station | Monitor#pollutionMonitor.stations]}.
-
 
 %%% Add new measurement to station
 addValue(Position, Time, Type, Value, Monitor) when is_tuple(Position) and is_record(Monitor, pollutionMonitor) ->
-  Found = getStationByPosition(Position, Monitor),
-  #pollutionMonitor{
-    stations = [addValueToStation(Found, #measurement{time = Time, type = Type, value = Value})]
-    ++ (Monitor#pollutionMonitor.stations -- Found)
-  };
+  {State, FoundOrMsg} = getStationByPosition(Position, Monitor),
+  case State of
+    ok -> {ok, #pollutionMonitor{
+      stations = [addValueToStation(FoundOrMsg, #measurement{time = Time, type = Type, value = Value})]
+      ++ (Monitor#pollutionMonitor.stations -- FoundOrMsg)
+    }
+    };
+    _ -> {error, FoundOrMsg}
+  end;
 
 addValue(Name, Time, Type, Value, Monitor) when is_list(Name) and is_record(Monitor, pollutionMonitor) ->
-  Found = getStationByName(Name, Monitor),
-  #pollutionMonitor{
-    stations = [addValueToStation(Found, #measurement{time = Time, type = Type, value = Value})]
-    ++ (Monitor#pollutionMonitor.stations -- Found)
-  }.
+  {State, FoundOrMsg} = getStationByName(Name, Monitor),
+  case State of
+    ok -> {ok, #pollutionMonitor{
+      stations = [addValueToStation(FoundOrMsg, #measurement{time = Time, type = Type, value = Value})]
+      ++ (Monitor#pollutionMonitor.stations -- FoundOrMsg)
+    }
+    };
+    _ -> {error, FoundOrMsg}
+  end.
+
+%%% Remove measurement from station
+removeValue(Position, Time, Type, Monitor) when is_tuple(Position) and is_record(Monitor, pollutionMonitor) ->
+  {State, StationsOrMsg} = getStationByPosition(Position, Monitor),
+  case State of
+    ok -> removeValueFromStations(StationsOrMsg, Time, Type, Monitor);
+    _ -> {error, StationsOrMsg}
+  end;
+
+removeValue(Name, Time, Type, Monitor) when is_list(Name) and is_record(Monitor, pollutionMonitor) ->
+  {State, StationsOrMsg} = getStationByName(Name, Monitor),
+  case State of
+    ok -> removeValueFromStations(StationsOrMsg, Time, Type, Monitor);
+    _ -> {error, StationsOrMsg}
+  end.
+
+%%% Get measurement from station
+getOneValue(Position, Time, Type, Monitor) when is_tuple(Position) and is_record(Monitor, pollutionMonitor) ->
+  {State, StationsOrMsg} = getStationByPosition(Position, Monitor),
+  case State of
+    ok -> getOneValue(Time, Type, StationsOrMsg);
+    _ -> {error, StationsOrMsg}
+  end;
+
+getOneValue(Name, Time, Type, Monitor) when is_list(Name) and is_record(Monitor, pollutionMonitor) ->
+  {State, StationsOrMsg} = getStationByName(Name, Monitor),
+  case State of
+    ok -> getOneValue(Time, Type, StationsOrMsg);
+    _ -> {error, StationsOrMsg}
+  end.
+
+%%% Get station mean value
+getStationMean(Position, Type, Monitor) when is_tuple(Position) and is_record(Monitor, pollutionMonitor) ->
+  {State, StationsOrMsg} = getStationByPosition(Position, Monitor),
+  case State of
+    ok -> {ok, getMean((hd(StationsOrMsg))#measurementStation.measurements, Type)};
+    _ -> {error, StationsOrMsg}
+  end;
+
+getStationMean(Name, Type, Monitor) when is_list(Name) and is_record(Monitor, pollutionMonitor) ->
+  {State, StationsOrMsg} = getStationByName(Name, Monitor),
+  case State of
+    ok -> {ok, getMean((hd(StationsOrMsg))#measurementStation.measurements, Type)};
+    _ -> {error, StationsOrMsg}
+  end.
+
+%%% Get daily mean value
+getDailyMean(Type, Date, Monitor) ->
+  {SumOfMeasurements, CountOfMeasurements} = lists:foldl(
+    fun(#measurement{value = Value}, {Acc1, Acc2}) -> {Value + Acc1, Acc2 + 1} end,
+    {0, 0},
+    getMonitorMeasurementsByTypeAndDate(Type, Date, Monitor)
+  ),
+  case CountOfMeasurements == 0 of
+    true -> {ok, 0};
+    false -> {ok, (SumOfMeasurements / CountOfMeasurements)}
+  end.
+
+%%% Calculate standard deviation of measurements by type and hour
+getDeviation(Type, Hour, Monitor) ->
+  Measurements = getMonitorMeasurementsByTypeAndHour(Type, Hour, Monitor),
+  {SumOfMeasurements, CountOfMeasurements} = lists:foldl(
+    fun(#measurement{value = Value}, {Sum, Cnt}) -> {Value + Sum, 1 + Cnt} end,
+    {0, 0},
+    Measurements
+  ),
+  Avg = case CountOfMeasurements of
+          0 -> 0;
+          _ -> SumOfMeasurements / CountOfMeasurements
+        end,
+  VarianceDenominator = lists:foldl(
+    fun(#measurement{value = Value}, VD) -> (VD + math:pow(Value - Avg, 2)) end,
+    0,
+    Measurements
+  ),
+  case CountOfMeasurements of
+    0 -> {ok, 0};
+    _ -> {ok, math:sqrt(VarianceDenominator / CountOfMeasurements)}
+  end.
+
+
+%% UTILITY FUNCTIONS
+
+addStationToMonitor(Station, Monitor) when is_record(Station, measurementStation) ->
+  #pollutionMonitor{stations = [Station | Monitor#pollutionMonitor.stations]}.
 
 addValueToStation([Station | []], Measurement) when is_record(Station, measurementStation) and is_record(Measurement, measurement) ->
   #measurementStation{
@@ -61,9 +150,9 @@ addValueToStation([Station | []], Measurement) when is_record(Station, measureme
 getStationByPosition(Position, Monitor) when is_tuple(Position) ->
   Found = [S || S <- Monitor#pollutionMonitor.stations, S#measurementStation.position =:= Position],
   case length(Found) of
-    0 -> throw("No station at this position was found.");
-    1 -> Found;
-    _ -> throw("There are a few stations at this position.")
+    0 -> {error, "No station at this position was found."};
+    1 -> {ok, Found};
+    _ -> {error, "There are a few stations at this position."}
   end.
 
 getStationByName(Name, Monitor) when is_list(Name) ->
@@ -74,26 +163,19 @@ getStationByName(Name, Monitor) when is_list(Name) ->
     Monitor#pollutionMonitor.stations
   ),
   case length(Found) of
-    0 -> throw("No station with this name was found.");
-    1 -> Found;
-    _ -> throw("There are a few stations with this name.")
+    0 -> {error, "No station with this name was found."};
+    1 -> {ok, Found};
+    _ -> {error, "There are a few stations with this name."}
   end.
-
-%%% Remove measurement from station
-removeValue(Position, Time, Type, Monitor) when is_tuple(Position) and is_record(Monitor, pollutionMonitor) ->
-  removeValueFromStations(getStationByPosition(Position, Monitor), Time, Type, Monitor);
-
-removeValue(Name, Time, Type, Monitor) when is_list(Name) and is_record(Monitor, pollutionMonitor) ->
-  removeValueFromStations(getStationByName(Name, Monitor), Time, Type, Monitor).
 
 removeValueFromStations(Stations, Time, Type, Monitor) ->
   FoundStations = [S || S <- Stations, length(filterMeasurements(Time, Type, S#measurementStation.measurements)) > 0],
   case length(FoundStations) of
-    0 -> throw("No stations with required measurements found.");
-    1 -> #pollutionMonitor{
+    0 -> {error, "No stations with required measurements found."};
+    1 -> {ok, #pollutionMonitor{
       stations = [removeValueFromStation(Time, Type, hd(FoundStations)) | (Monitor#pollutionMonitor.stations -- FoundStations)]
-    };
-    _ -> throw("Too many stations found.")
+    }};
+    _ -> {error, "Too many stations found."}
   end.
 
 removeValueFromStation(Time, Type, Station) ->
@@ -108,26 +190,14 @@ filterMeasurements(Time, Type, Measurements) when is_list(Measurements) ->
     Measurements
   ).
 
-%%% Get measurement from station
-getOneValue(Position, Time, Type, Monitor) when is_tuple(Position) and is_record(Monitor, pollutionMonitor) ->
-  getOneValue(Time, Type, getStationByPosition(Position, Monitor));
-getOneValue(Name, Time, Type, Monitor) when is_list(Name) and is_record(Monitor, pollutionMonitor) ->
-  getOneValue(Time, Type, getStationByName(Name, Monitor)).
-
 getOneValue(Time, Type, Stations) ->
   case length(Stations) of
-    0 -> throw("No stations with required measurements found.");
-    1 -> (hd(
+    0 -> {error, "No stations with required measurements found."};
+    1 -> {ok, (hd(
       filterMeasurements(Time, Type, (hd(Stations))#measurementStation.measurements)
-    ))#measurement.value;
-    _ -> throw("Too many stations found.")
+    ))#measurement.value};
+    _ -> {error, "Too many stations found."}
   end.
-
-%%% Get station mean value
-getStationMean(Position, Type, Monitor) when is_tuple(Position) and is_record(Monitor, pollutionMonitor) ->
-  getMean((hd(getStationByPosition(Position, Monitor)))#measurementStation.measurements, Type);
-getStationMean(Name, Type, Monitor) when is_list(Name) and is_record(Monitor, pollutionMonitor) ->
-  getMean((hd(getStationByName(Name, Monitor)))#measurementStation.measurements, Type).
 
 getMean([], _) -> 0;
 getMean(Measurements, Type) ->
@@ -139,18 +209,6 @@ getMean(Measurements, Type) ->
   {MeasurementsSum, MeasurementsCount} = lists:foldl(SumFun, {0, 0}, FilteredMeasurements),
   MeasurementsSum / MeasurementsCount.
 
-%%% Get daily mean value
-getDailyMean(Type, Date, Monitor) ->
-  {SumOfMeasurements, CountOfMeasurements} = lists:foldl(
-    fun(#measurement{value = Value}, {Acc1, Acc2}) -> {Value + Acc1, Acc2 + 1} end,
-    {0, 0},
-    getMonitorMeasurementsByTypeAndDate(Type, Date, Monitor)
-  ),
-  case CountOfMeasurements == 0 of
-    true -> 0;
-    false -> (SumOfMeasurements / CountOfMeasurements)
-  end.
-
 getMonitorMeasurementsByTypeAndDate(Type, Date, #pollutionMonitor{stations = Stations}) ->
   lists:concat([getStationMeasurementsByTypeAndDate(Type, Date, S) || S <- Stations]).
 
@@ -161,28 +219,6 @@ getStationMeasurementsByTypeAndDate(Type, Date, #measurementStation{measurements
     end,
     Measurements
   ).
-
-%%% Calculate standard deviation of measurements by type and hour
-getDeviation(Type, Hour, Monitor) ->
-  Measurements = getMonitorMeasurementsByTypeAndHour(Type, Hour, Monitor),
-  {SumOfMeasurements, CountOfMeasurements} = lists:foldl(
-    fun(#measurement{value = Value}, {Sum, Cnt}) -> {Value + Sum, 1 + Cnt} end,
-    {0, 0},
-    Measurements
-  ),
-  Avg = if
-          CountOfMeasurements == 0 -> 0;
-          true -> SumOfMeasurements / CountOfMeasurements
-        end,
-  VarianceDenominator = lists:foldl(
-    fun(#measurement{value = Value}, VD) -> (VD + math:pow(Value - Avg, 2)) end,
-    0,
-    Measurements
-  ),
-  if
-    CountOfMeasurements == 0 -> 0;
-    true -> math:sqrt(VarianceDenominator / CountOfMeasurements)
-  end.
 
 getMonitorMeasurementsByTypeAndHour(Type, Hour, #pollutionMonitor{stations = Stations}) ->
   lists:concat([getStationMeasurementsByTypeAndHour(Type, Hour, S) || S <- Stations]).
