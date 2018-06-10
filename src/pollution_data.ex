@@ -8,7 +8,33 @@ defmodule PollutionData do
     |> Enum.map(&parseEntry/1)
   end
 
-  def identifyStations(stations) do
+  def importFromCSV(filePath) do
+    entries = importLinesFromCSV(filePath)
+    stations = identifyStations(entries)
+    importStations(stations)
+    importMeasurements(entries, "PM10")
+  end
+
+  def importStations(stations) do
+    for station <- stations, do:
+      :pollution_server_otp.addStation(station.name, station.location)
+  end
+
+  def importMeasurements(entries, type) do
+    for entry <- entries, do:
+      :pollution_server_otp.addValue(entry.location, entry.datetime, type, entry.pollutionLevel)
+  end
+
+  def importWithMeasurements(filePath) do
+    entries = importLinesFromCSV(filePath)
+    stations = identifyStations(entries)
+    %{
+      :stationsLoadingTime => measure(fn -> importStations(stations) end),
+      :measurementsLoadingTime => measure(fn -> importMeasurements(entries, "PM10") end)
+    }
+  end
+
+  defp identifyStations(stations) do
     stations
     |> Enum.uniq_by(fn(m) -> m.location end)
 #    |> Enum.reduce(0, fn (_x, acc) -> acc + 1 end)
